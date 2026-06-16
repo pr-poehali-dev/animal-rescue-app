@@ -4,35 +4,35 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 40 33% 98%;
+    --foreground: 150 18% 14%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 150 18% 14%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 150 18% 14%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 158 42% 30%;
+    --primary-foreground: 40 40% 98%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 36 80% 92%;
+    --secondary-foreground: 28 60% 28%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 40 25% 94%;
+    --muted-foreground: 150 8% 42%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 28 92% 56%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 4 78% 56%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 40 20% 89%;
+    --input: 40 20% 89%;
+    --ring: 158 42% 30%;
 
-    --radius: 0.5rem;
+    --radius: 1rem;
 
     --sidebar-background: 0 0% 98%;
 
@@ -97,5 +97,54 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: "Manrope", sans-serif;
   }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: "Unbounded", sans-serif;
+  }
+  .hover-lift {
+    @apply transition-all duration-300;
+  }
+  .hover-lift:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 20px 40px -16px hsl(158 42% 30% / 0.25);
+  }
+  .grain {
+    background-image: radial-gradient(
+      hsl(158 42% 30% / 0.04) 1px,
+      transparent 1px
+    );
+    background-size: 18px 18px;
+  }
+}
+
+@keyframes float-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-float-up {
+  animation: float-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 hsl(4 78% 56% / 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 14px hsl(4 78% 56% / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 hsl(4 78% 56% / 0);
+  }
+}
+.pulse-ring {
+  animation: pulse-ring 2s infinite;
 }

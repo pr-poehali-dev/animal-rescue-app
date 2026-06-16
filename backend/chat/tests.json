@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "name": "Community GET",
+      "method": "GET",
+      "path": "/",
+      "queryParams": {"section": "community"},
+      "expectedStatus": 200
+    },
+    {
+      "name": "Community POST",
+      "method": "POST",
+      "path": "/",
+      "queryParams": {"section": "community"},
+      "body": {"sender": "Тест", "body": "Привет из теста"},
+      "expectedStatus": 201
+    },
+    {
+      "name": "Create chat",
+      "method": "POST",
+      "path": "/",
+      "queryParams": {"section": "chats"},
+      "body": {"user_a": "Аня", "user_b": "Борис"},
+      "expectedStatus": 200
+    },
+    {
+      "name": "List chats",
+      "method": "GET",
+      "path": "/",
+      "queryParams": {"section": "chats", "user": "Аня"},
+      "expectedStatus": 200
+    }
+  ]
+}

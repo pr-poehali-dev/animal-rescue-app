@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { MessagesPanel, ContactDialog } from '@/components/Chat';
 
 const ADS_URL = 'https://functions.poehali.dev/997c7674-175f-4ad6-9017-122608a22b1d';
 
@@ -30,6 +31,7 @@ const NAV = [
   { id: 'urgent', label: 'Срочная помощь', icon: 'Siren' },
   { id: 'ads', label: 'Объявления', icon: 'Search' },
   { id: 'my', label: 'Мои объявления', icon: 'FileText' },
+  { id: 'messages', label: 'Сообщения', icon: 'MessageCircle' },
   { id: 'profile', label: 'Профиль', icon: 'User' },
   { id: 'about', label: 'О приложении', icon: 'Info' },
   { id: 'contacts', label: 'Контакты', icon: 'Phone' },
@@ -57,25 +59,44 @@ const statusColor = (s: string) =>
   : s === 'Найден' ? 'bg-primary text-primary-foreground'
   : 'bg-accent text-accent-foreground';
 
+const MY_NAME_KEY = 'lapa_my_name';
+
 export default function Index() {
   const [active, setActive] = useState('home');
   const [menu, setMenu] = useState(false);
   const [ads, setAds] = useState<Ad[]>([]);
   const [formOpen, setFormOpen] = useState(false);
+  const [myName, setMyName] = useState(() => localStorage.getItem(MY_NAME_KEY) || '');
+  const [namePrompt, setNamePrompt] = useState(false);
+  const [pendingSection, setPendingSection] = useState('');
 
   const loadAds = async () => {
     try {
       const res = await fetch(ADS_URL);
       const data = await res.json();
       setAds(data.items || []);
-    } catch {
-      // тихо игнорируем, покажутся примеры
-    }
+    } catch { /* тихо */ }
   };
 
   useEffect(() => { loadAds(); }, []);
 
-  const go = (id: string) => { setActive(id); setMenu(false); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const go = (id: string) => {
+    if ((id === 'messages') && !myName) {
+      setPendingSection(id);
+      setNamePrompt(true);
+      return;
+    }
+    setActive(id); setMenu(false); window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const saveName = (name: string) => {
+    const n = name.trim();
+    if (!n) return;
+    localStorage.setItem(MY_NAME_KEY, n);
+    setMyName(n);
+    setNamePrompt(false);
+    if (pendingSection) { setActive(pendingSection); setPendingSection(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  };
 
   return (
     <div className="min-h-screen bg-background grain">
@@ -124,9 +145,10 @@ export default function Index() {
       <main className="container py-10 md:py-16">
         {active === 'home' && <Home go={go} />}
         {active === 'urgent' && <Urgent ads={ads} />}
-        {active === 'ads' && <Ads ads={ads} onCreate={() => setFormOpen(true)} />}
+        {active === 'ads' && <Ads ads={ads} myName={myName} onCreate={() => setFormOpen(true)} />}
         {active === 'my' && <MyAds ads={ads} onCreate={() => setFormOpen(true)} />}
-        {active === 'profile' && <Profile />}
+        {active === 'messages' && <Messages myName={myName} />}
+        {active === 'profile' && <Profile myName={myName} />}
         {active === 'about' && <About />}
         {active === 'contacts' && <Contacts />}
       </main>
@@ -163,7 +185,30 @@ export default function Index() {
       </footer>
 
       <AdForm open={formOpen} onOpenChange={setFormOpen} onCreated={loadAds} />
+      <NameDialog open={namePrompt} onSave={saveName} />
     </div>
+  );
+}
+
+function NameDialog({ open, onSave }: { open: boolean; onSave: (n: string) => void }) {
+  const [val, setVal] = useState('');
+  return (
+    <Dialog open={open} onOpenChange={() => {}}>
+      <DialogContent className="max-w-sm rounded-3xl">
+        <DialogHeader>
+          <DialogTitle className="font-display font-700 text-xl">Как тебя зовут?</DialogTitle>
+        </DialogHeader>
+        <p className="text-muted-foreground text-sm -mt-1">Имя будет видно другим пользователям в чате</p>
+        <div className="grid gap-3 mt-1">
+          <Input value={val} onChange={(e) => setVal(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && onSave(val)}
+            placeholder="Введите имя или псевдоним" className="rounded-xl" autoFocus />
+          <Button onClick={() => onSave(val)} disabled={!val.trim()} className="rounded-full font-700 gap-2">
+            <Icon name="Check" size={16} /> Продолжить
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -376,8 +421,10 @@ function Urgent({ ads }: { ads: Ad[] }) {
 
 const FALLBACK = [PUPPY, CAT, DOG];
 
-function AdCard({ a, i }: { a: Ad; i: number }) {
-  const img = a.image_url && a.image_url.trim() ? a.image_url : FALLBACK[(a.id ?? i) % 3];
+function AdCard({ a, i, myName }: { a: Ad; i: number; myName?: string }) {
+  const [contactOpen, setContactOpen] = useState(false);
+  const img = a.image_url && a.image_url.trim() ? a.image_url : FALLBACK[Math.abs((a.id ?? i)) % 3];
+  const canChat = myName && (a.id ?? 0) > 0;
   return (
     <div className="bg-card border border-border rounded-3xl overflow-hidden hover-lift animate-float-up" style={{ animationDelay: `${i * 0.06}s` }}>
       <div className="relative">
@@ -390,14 +437,25 @@ function AdCard({ a, i }: { a: Ad; i: number }) {
         <p className="text-muted-foreground text-sm mt-0.5">{a.species}{a.description ? ` · ${a.description.slice(0, 40)}` : ''}</p>
         <div className="flex items-center justify-between mt-4">
           <span className="text-muted-foreground text-sm flex items-center gap-1"><Icon name="MapPin" size={14} /> {a.city}</span>
-          {a.contact && <span className="text-primary text-sm font-700 flex items-center gap-1"><Icon name="Phone" size={13} /> {a.contact}</span>}
+          {canChat ? (
+            <button onClick={() => setContactOpen(true)}
+              className="flex items-center gap-1.5 text-sm font-700 text-primary hover:text-accent transition-colors">
+              <Icon name="MessageCircle" size={15} /> Написать
+            </button>
+          ) : a.contact ? (
+            <span className="text-primary text-sm font-700 flex items-center gap-1"><Icon name="Phone" size={13} /> {a.contact}</span>
+          ) : null}
         </div>
       </div>
+      {canChat && (
+        <ContactDialog open={contactOpen} onOpenChange={setContactOpen}
+          adId={a.id!} adName={a.name} adContact={a.contact} myName={myName!} />
+      )}
     </div>
   );
 }
 
-function Ads({ ads, onCreate }: { ads: Ad[]; onCreate: () => void }) {
+function Ads({ ads, myName, onCreate }: { ads: Ad[]; myName?: string; onCreate: () => void }) {
   const filters = ['Все', 'Пропал', 'Найден', 'Ищет дом'];
   const [f, setF] = useState('Все');
   const seed: Ad[] = ADS.map((a, idx) => ({ id: -idx - 1, name: a.name, species: a.type, status: a.status, city: a.city, image_url: a.img }));
@@ -414,7 +472,7 @@ function Ads({ ads, onCreate }: { ads: Ad[]; onCreate: () => void }) {
         <Button onClick={onCreate} className="ml-auto rounded-full font-700 gap-2 bg-accent hover:bg-accent/90 text-accent-foreground"><Icon name="Plus" size={16} /> Добавить</Button>
       </div>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {list.map((a, i) => <AdCard key={a.id ?? i} a={a} i={i} />)}
+        {list.map((a, i) => <AdCard key={a.id ?? i} a={a} i={i} myName={myName} />)}
       </div>
     </div>
   );
@@ -437,28 +495,44 @@ function MyAds({ ads, onCreate }: { ads: Ad[]; onCreate: () => void }) {
   );
 }
 
-function Profile() {
+function Messages({ myName }: { myName: string }) {
+  return (
+    <div className="max-w-2xl mx-auto">
+      <SectionTitle kicker="Чаты" title="Сообщения"
+        sub="Общий чат сообщества и личные переписки с авторами объявлений." />
+      <MessagesPanel myName={myName} />
+    </div>
+  );
+}
+
+function Profile({ myName }: { myName: string }) {
+  const letter = myName ? myName.charAt(0).toUpperCase() : '?';
   return (
     <div className="max-w-2xl">
       <SectionTitle kicker="Аккаунт" title="Профиль" />
       <div className="bg-card border border-border rounded-3xl p-7 animate-float-up">
         <div className="flex items-center gap-5">
-          <div className="w-20 h-20 rounded-3xl bg-primary text-primary-foreground grid place-items-center font-display font-800 text-3xl">А</div>
+          <div className="w-20 h-20 rounded-3xl bg-primary text-primary-foreground grid place-items-center font-display font-800 text-3xl">{letter}</div>
           <div>
-            <h3 className="font-display font-700 text-2xl">Анна Волкова</h3>
-            <p className="text-muted-foreground">Волонтёр · Москва</p>
-            <span className="inline-flex items-center gap-1.5 mt-2 bg-secondary text-secondary-foreground px-3 py-1 rounded-full text-xs font-700"><Icon name="Award" size={13} /> Помогла 14 животным</span>
+            <h3 className="font-display font-700 text-2xl">{myName || 'Имя не задано'}</h3>
+            <p className="text-muted-foreground">Участник сообщества</p>
+            <span className="inline-flex items-center gap-1.5 mt-2 bg-secondary text-secondary-foreground px-3 py-1 rounded-full text-xs font-700"><Icon name="Award" size={13} /> Участник платформы</span>
           </div>
         </div>
         <div className="grid sm:grid-cols-2 gap-3 mt-7">
-          {[['Mail', 'anna@example.com'], ['Phone', '+7 900 123-45-67'], ['MapPin', 'Москва'], ['Calendar', 'С нами с 2024']].map(([ic, val]) => (
-            <div key={val} className="flex items-center gap-3 bg-muted/60 rounded-2xl p-3.5">
-              <Icon name={ic} size={18} className="text-primary" />
-              <span className="text-sm font-600">{val}</span>
-            </div>
-          ))}
+          <div className="flex items-center gap-3 bg-muted/60 rounded-2xl p-3.5">
+            <Icon name="User" size={18} className="text-primary" />
+            <span className="text-sm font-600">{myName || 'не задано'}</span>
+          </div>
+          <div className="flex items-center gap-3 bg-muted/60 rounded-2xl p-3.5">
+            <Icon name="MessageCircle" size={18} className="text-primary" />
+            <span className="text-sm font-600">Чат доступен</span>
+          </div>
         </div>
-        <Button className="w-full mt-6 rounded-full font-700 h-12 gap-2"><Icon name="Settings" size={18} /> Редактировать профиль</Button>
+        <Button onClick={() => { localStorage.removeItem(MY_NAME_KEY); window.location.reload(); }}
+          variant="outline" className="w-full mt-4 rounded-full font-700 h-11 gap-2 border-2">
+          <Icon name="RefreshCw" size={16} /> Сменить имя
+        </Button>
       </div>
     </div>
   );

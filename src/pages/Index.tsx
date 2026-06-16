@@ -1,6 +1,25 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { toast } from 'sonner';
+
+const ADS_URL = 'https://functions.poehali.dev/997c7674-175f-4ad6-9017-122608a22b1d';
+
+type Ad = {
+  id?: number;
+  name: string;
+  species: string;
+  status: string;
+  city: string;
+  description?: string;
+  contact?: string;
+  image_url?: string;
+  is_urgent?: boolean;
+};
 
 const DOG = 'https://cdn.poehali.dev/projects/9d0f550c-a7aa-4871-a597-3e402fdd88d3/files/d3395677-9e09-4ba0-b085-bb57a6cf2b8f.jpg';
 const CAT = 'https://cdn.poehali.dev/projects/9d0f550c-a7aa-4871-a597-3e402fdd88d3/files/f82186d3-3e67-4de4-b5f9-c9fa9b2f9fcb.jpg';
@@ -41,6 +60,20 @@ const statusColor = (s: string) =>
 export default function Index() {
   const [active, setActive] = useState('home');
   const [menu, setMenu] = useState(false);
+  const [ads, setAds] = useState<Ad[]>([]);
+  const [formOpen, setFormOpen] = useState(false);
+
+  const loadAds = async () => {
+    try {
+      const res = await fetch(ADS_URL);
+      const data = await res.json();
+      setAds(data.items || []);
+    } catch {
+      // тихо игнорируем, покажутся примеры
+    }
+  };
+
+  useEffect(() => { loadAds(); }, []);
 
   const go = (id: string) => { setActive(id); setMenu(false); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
@@ -90,9 +123,9 @@ export default function Index() {
 
       <main className="container py-10 md:py-16">
         {active === 'home' && <Home go={go} />}
-        {active === 'urgent' && <Urgent />}
-        {active === 'ads' && <Ads />}
-        {active === 'my' && <MyAds go={go} />}
+        {active === 'urgent' && <Urgent ads={ads} />}
+        {active === 'ads' && <Ads ads={ads} onCreate={() => setFormOpen(true)} />}
+        {active === 'my' && <MyAds ads={ads} onCreate={() => setFormOpen(true)} />}
         {active === 'profile' && <Profile />}
         {active === 'about' && <About />}
         {active === 'contacts' && <Contacts />}
@@ -128,7 +161,97 @@ export default function Index() {
         </div>
         <div className="border-t border-primary-foreground/10 py-5 text-center text-primary-foreground/50 text-sm">© 2026 Лапа помощи. Сделано с заботой о животных.</div>
       </footer>
+
+      <AdForm open={formOpen} onOpenChange={setFormOpen} onCreated={loadAds} />
     </div>
+  );
+}
+
+function AdForm({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void }) {
+  const empty: Ad = { name: '', species: '', status: 'Ищет дом', city: '', description: '', contact: '', image_url: '', is_urgent: false };
+  const [form, setForm] = useState<Ad>(empty);
+  const [saving, setSaving] = useState(false);
+  const statuses = ['Пропал', 'Найден', 'Ищет дом'];
+
+  const set = (k: keyof Ad, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
+
+  const submit = async () => {
+    if (!form.name.trim() || !form.species.trim() || !form.city.trim()) {
+      toast.error('Заполните имя, вид и город');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(ADS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Объявление опубликовано!');
+      setForm(empty);
+      onOpenChange(false);
+      onCreated();
+    } catch {
+      toast.error('Не удалось сохранить. Попробуйте ещё раз');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg rounded-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-display font-700 text-2xl">Новое объявление</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 mt-2">
+          <div className="grid gap-1.5">
+            <Label>Кличка / имя животного *</Label>
+            <Input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Например, Рекс" className="rounded-xl" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label>Вид *</Label>
+              <Input value={form.species} onChange={(e) => set('species', e.target.value)} placeholder="Собака, кошка…" className="rounded-xl" />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Город *</Label>
+              <Input value={form.city} onChange={(e) => set('city', e.target.value)} placeholder="Москва" className="rounded-xl" />
+            </div>
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Статус</Label>
+            <div className="flex flex-wrap gap-2">
+              {statuses.map((s) => (
+                <button key={s} type="button" onClick={() => set('status', s)}
+                  className={`px-4 py-2 rounded-full text-sm font-700 transition-all ${form.status === s ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>{s}</button>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Описание</Label>
+            <Textarea value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Расскажите о животном, особых приметах, состоянии…" className="rounded-xl min-h-24" />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Контакт для связи</Label>
+            <Input value={form.contact} onChange={(e) => set('contact', e.target.value)} placeholder="Телефон или @username" className="rounded-xl" />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Ссылка на фото</Label>
+            <Input value={form.image_url} onChange={(e) => set('image_url', e.target.value)} placeholder="https://…" className="rounded-xl" />
+          </div>
+          <label className="flex items-center gap-3 bg-destructive/5 border border-destructive/20 rounded-2xl p-3.5 cursor-pointer">
+            <input type="checkbox" checked={!!form.is_urgent} onChange={(e) => set('is_urgent', e.target.checked)} className="w-5 h-5 accent-[hsl(4_78%_56%)]" />
+            <span className="text-sm font-600 flex items-center gap-1.5"><Icon name="Siren" size={16} className="text-destructive" /> Срочная помощь — критическое состояние</span>
+          </label>
+          <Button onClick={submit} disabled={saving} className="rounded-full font-700 h-12 gap-2 bg-primary hover:bg-primary/90">
+            {saving ? <Icon name="Loader2" size={18} className="animate-spin" /> : <Icon name="Send" size={18} />}
+            {saving ? 'Публикуем…' : 'Опубликовать объявление'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -214,15 +337,20 @@ function Home({ go }: { go: (id: string) => void }) {
   );
 }
 
-function Urgent() {
+function Urgent({ ads }: { ads: Ad[] }) {
+  const dbUrgent = ads.filter((a) => a.is_urgent).map((a) => ({
+    name: a.name, type: a.species, img: a.image_url || PUPPY, city: a.city,
+    desc: a.description || 'Срочно нужна помощь', tag: 'SOS', contact: a.contact,
+  }));
+  const list = [...dbUrgent, ...URGENT];
   return (
     <div>
       <SectionTitle kicker="Нужна помощь сейчас" title="Срочная помощь" sub="Эти животные находятся в критическом состоянии. Каждая минута на счету — отзовись, если можешь помочь." />
       <div className="grid md:grid-cols-2 gap-5">
-        {URGENT.map((a, i) => (
-          <div key={a.name} className="bg-card border-2 border-destructive/20 rounded-3xl overflow-hidden hover-lift animate-float-up" style={{ animationDelay: `${i * 0.1}s` }}>
+        {list.map((a, i) => (
+          <div key={`${a.name}-${i}`} className="bg-card border-2 border-destructive/20 rounded-3xl overflow-hidden hover-lift animate-float-up" style={{ animationDelay: `${i * 0.1}s` }}>
             <div className="relative">
-              <img src={a.img} alt={a.name} className="w-full h-56 object-cover" />
+              <img src={a.img} alt={a.name} className="w-full h-56 object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).src = PUPPY; }} />
               <span className="absolute top-4 left-4 bg-destructive text-destructive-foreground px-3 py-1.5 rounded-full text-xs font-700 flex items-center gap-1.5 pulse-ring">
                 <Icon name="Siren" size={14} /> SOS · {a.tag}
               </span>
@@ -246,64 +374,61 @@ function Urgent() {
   );
 }
 
-function Ads() {
-  const filters = ['Все', 'Пропал', 'Найден', 'Ищет дом'];
-  const [f, setF] = useState('Все');
-  const list = f === 'Все' ? ADS : ADS.filter((a) => a.status === f);
+const FALLBACK = [PUPPY, CAT, DOG];
+
+function AdCard({ a, i }: { a: Ad; i: number }) {
+  const img = a.image_url && a.image_url.trim() ? a.image_url : FALLBACK[(a.id ?? i) % 3];
   return (
-    <div>
-      <SectionTitle kicker="Лента" title="Объявления" sub="Пропавшие, найденные и ищущие дом животные. Используй фильтры, чтобы найти нужное." />
-      <div className="flex flex-wrap gap-2 mb-7">
-        {filters.map((x) => (
-          <button key={x} onClick={() => setF(x)}
-            className={`px-4 py-2 rounded-full text-sm font-700 transition-all ${f === x ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-secondary'}`}>{x}</button>
-        ))}
+    <div className="bg-card border border-border rounded-3xl overflow-hidden hover-lift animate-float-up" style={{ animationDelay: `${i * 0.06}s` }}>
+      <div className="relative">
+        <img src={img} alt={a.name} className="w-full h-48 object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK[i % 3]; }} />
+        <span className={`absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-700 ${statusColor(a.status)}`}>{a.status}</span>
+        {a.is_urgent && <span className="absolute top-3 right-3 bg-destructive text-destructive-foreground px-2.5 py-1 rounded-full text-xs font-700 flex items-center gap-1"><Icon name="Siren" size={12} /> SOS</span>}
       </div>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {list.map((a, i) => (
-          <div key={a.name} className="bg-card border border-border rounded-3xl overflow-hidden hover-lift animate-float-up" style={{ animationDelay: `${i * 0.08}s` }}>
-            <div className="relative">
-              <img src={a.img} alt={a.name} className="w-full h-48 object-cover" />
-              <span className={`absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-700 ${statusColor(a.status)}`}>{a.status}</span>
-            </div>
-            <div className="p-5">
-              <h3 className="font-display font-700 text-xl">{a.name}</h3>
-              <p className="text-muted-foreground text-sm mt-0.5">{a.type}</p>
-              <div className="flex items-center justify-between mt-4">
-                <span className="text-muted-foreground text-sm flex items-center gap-1"><Icon name="MapPin" size={14} /> {a.city}</span>
-                <Button size="sm" variant="ghost" className="rounded-full font-700 text-primary gap-1">Подробнее <Icon name="ArrowRight" size={14} /></Button>
-              </div>
-            </div>
-          </div>
-        ))}
+      <div className="p-5">
+        <h3 className="font-display font-700 text-xl">{a.name}</h3>
+        <p className="text-muted-foreground text-sm mt-0.5">{a.species}{a.description ? ` · ${a.description.slice(0, 40)}` : ''}</p>
+        <div className="flex items-center justify-between mt-4">
+          <span className="text-muted-foreground text-sm flex items-center gap-1"><Icon name="MapPin" size={14} /> {a.city}</span>
+          {a.contact && <span className="text-primary text-sm font-700 flex items-center gap-1"><Icon name="Phone" size={13} /> {a.contact}</span>}
+        </div>
       </div>
     </div>
   );
 }
 
-function MyAds({ go }: { go: (id: string) => void }) {
+function Ads({ ads, onCreate }: { ads: Ad[]; onCreate: () => void }) {
+  const filters = ['Все', 'Пропал', 'Найден', 'Ищет дом'];
+  const [f, setF] = useState('Все');
+  const seed: Ad[] = ADS.map((a, idx) => ({ id: -idx - 1, name: a.name, species: a.type, status: a.status, city: a.city, image_url: a.img }));
+  const all = [...ads, ...seed];
+  const list = f === 'Все' ? all : all.filter((a) => a.status === f);
   return (
     <div>
-      <SectionTitle kicker="Личный кабинет" title="Мои объявления" sub="Здесь появятся твои публикации. Создай первое объявление, чтобы помочь животному найти дом." />
-      <div className="bg-card border border-border rounded-3xl overflow-hidden mb-5 hover-lift animate-float-up flex flex-col sm:flex-row">
-        <img src={DOG} alt="Рекс" className="w-full sm:w-48 h-48 object-cover" />
-        <div className="p-6 flex-1">
-          <div className="flex items-center justify-between">
-            <h3 className="font-display font-700 text-xl">Рекс</h3>
-            <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-700">Активно</span>
-          </div>
-          <p className="text-muted-foreground text-sm mt-1">Найден · овчарка · Санкт-Петербург</p>
-          <p className="text-muted-foreground text-sm mt-3 flex items-center gap-4">
-            <span className="flex items-center gap-1"><Icon name="Eye" size={14} /> 248 просмотров</span>
-            <span className="flex items-center gap-1"><Icon name="MessageCircle" size={14} /> 12 откликов</span>
-          </p>
-          <div className="flex gap-2 mt-4">
-            <Button size="sm" variant="outline" className="rounded-full font-700 gap-1.5"><Icon name="Pencil" size={14} /> Редактировать</Button>
-            <Button size="sm" variant="ghost" className="rounded-full font-700 text-destructive gap-1.5"><Icon name="Trash2" size={14} /> Удалить</Button>
-          </div>
-        </div>
+      <SectionTitle kicker="Лента" title="Объявления" sub="Пропавшие, найденные и ищущие дом животные. Используй фильтры, чтобы найти нужное." />
+      <div className="flex flex-wrap items-center gap-2 mb-7">
+        {filters.map((x) => (
+          <button key={x} onClick={() => setF(x)}
+            className={`px-4 py-2 rounded-full text-sm font-700 transition-all ${f === x ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-secondary'}`}>{x}</button>
+        ))}
+        <Button onClick={onCreate} className="ml-auto rounded-full font-700 gap-2 bg-accent hover:bg-accent/90 text-accent-foreground"><Icon name="Plus" size={16} /> Добавить</Button>
       </div>
-      <button onClick={() => go('ads')} className="w-full border-2 border-dashed border-border rounded-3xl p-8 text-center hover:border-accent hover:bg-secondary/40 transition-all animate-float-up">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        {list.map((a, i) => <AdCard key={a.id ?? i} a={a} i={i} />)}
+      </div>
+    </div>
+  );
+}
+
+function MyAds({ ads, onCreate }: { ads: Ad[]; onCreate: () => void }) {
+  const mine = ads.filter((a) => (a.id ?? 0) > 0);
+  return (
+    <div>
+      <SectionTitle kicker="Личный кабинет" title="Мои объявления" sub="Здесь появляются твои публикации. Создай объявление, чтобы помочь животному найти дом." />
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-5">
+        {mine.map((a, i) => <AdCard key={a.id} a={a} i={i} />)}
+      </div>
+      <button onClick={onCreate} className="w-full border-2 border-dashed border-border rounded-3xl p-8 text-center hover:border-accent hover:bg-secondary/40 transition-all animate-float-up">
         <div className="w-14 h-14 rounded-2xl bg-accent/15 text-accent grid place-items-center mx-auto mb-3"><Icon name="Plus" size={28} /></div>
         <p className="font-display font-700 text-lg">Создать объявление</p>
         <p className="text-muted-foreground text-sm mt-1">Расскажи о животном, которому нужна помощь</p>

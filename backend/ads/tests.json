@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "name": "List ads",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Create ad",
+      "method": "POST",
+      "path": "/",
+      "body": {"name": "Тест", "species": "Собака", "status": "Ищет дом", "city": "Москва", "description": "Описание", "contact": "@test", "image_url": "", "is_urgent": false},
+      "expectedStatus": 201
+    }
+  ]
+}
